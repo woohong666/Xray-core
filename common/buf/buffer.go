@@ -31,6 +31,22 @@ func New() *Buffer {
 	}
 }
 
+func NewExisted(b []byte) *Buffer {
+	if cap(b) < Size {
+		panic("Invalid buffer")
+	}
+
+	oLen := len(b)
+	if oLen < Size {
+		b = b[:Size]
+	}
+
+	return &Buffer{
+		v:   b,
+		end: int32(oLen),
+	}
+}
+
 // StackNew creates a new Buffer object on stack.
 // This method is for buffers that is released in the same function.
 func StackNew() Buffer {
@@ -109,6 +125,9 @@ func (b *Buffer) BytesFrom(from int32) []byte {
 func (b *Buffer) BytesTo(to int32) []byte {
 	if to < 0 {
 		to += b.Len()
+	}
+	if to < 0 {
+		to = 0
 	}
 	return b.v[b.start : b.start+to]
 }

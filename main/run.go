@@ -17,7 +17,6 @@ import (
 	"github.com/xtls/xray-core/common/cmdarg"
 	"github.com/xtls/xray-core/common/platform"
 	"github.com/xtls/xray-core/core"
-	"github.com/xtls/xray-core/infra/conf"
 	"github.com/xtls/xray-core/main/commands/base"
 )
 
@@ -33,7 +32,7 @@ Xray. Multiple assign is accepted.
 The -confdir=dir flag sets a dir with multiple json config
 
 The -format=json flag sets the format of config files. 
-Default "json".
+Default "auto".
 
 The -test flag tells Xray to test config files only, 
 without launching the server
@@ -48,7 +47,7 @@ var (
 	configFiles cmdarg.Arg // "Config file for Xray.", the option is customed type, parse in main
 	configDir   string
 	test        = cmdRun.Flag.Bool("test", false, "Test config file only, without launching Xray server.")
-	format      = cmdRun.Flag.String("format", "json", "Format of input file.")
+	format      = cmdRun.Flag.String("format", "auto", "Format of input file.")
 
 	/* We have to do this here because Golang's Test will also need to parse flag, before
 	 * main func in this file is run.
@@ -83,9 +82,11 @@ func executeRun(cmd *base.Command, args []string) {
 	}
 	defer server.Close()
 
-	conf.FileCache = nil
-	conf.IPCache = nil
-	conf.SiteCache = nil
+	/*
+		conf.FileCache = nil
+		conf.IPCache = nil
+		conf.SiteCache = nil
+	*/
 
 	// Explicitly triggering GC to remove garbage from config loading.
 	runtime.GC()
@@ -111,13 +112,26 @@ func dirExists(file string) bool {
 	return err == nil && info.IsDir()
 }
 
+func getRegepxByFormat() string {
+	switch strings.ToLower(*format) {
+	case "json":
+		return `^.+\.json$`
+	case "toml":
+		return `^.+\.toml$`
+	case "yaml", "yml":
+		return `^.+\.(yaml|yml)$`
+	default:
+		return `^.+\.(json|toml|yaml|yml)$`
+	}
+}
+
 func readConfDir(dirPath string) {
 	confs, err := ioutil.ReadDir(dirPath)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	for _, f := range confs {
-		matched, err := regexp.MatchString(`^.+\.(json|toml|yaml|yml)$`, f.Name())
+		matched, err := regexp.MatchString(getRegepxByFormat(), f.Name())
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -158,30 +172,25 @@ func getConfigFilePath() cmdarg.Arg {
 }
 
 func getConfigFormat() string {
-	switch strings.ToLower(*format) {
-	case "pb", "protobuf":
-		return "protobuf"
-	case "yaml", "yml":
-		return "yaml"
-	case "toml":
-		return "toml"
-	default:
-		return "json"
+	f := core.GetFormatByExtension(*format)
+	if f == "" {
+		f = "auto"
 	}
+	return f
 }
 
 func startXray() (core.Server, error) {
 	configFiles := getConfigFilePath()
 
-	config, err := core.LoadConfig(getConfigFormat(), configFiles[0], configFiles)
+	//config, err := core.LoadConfig(getConfigFormat(), configFiles[0], configFiles)
 
-	//config, err := core.LoadConfigs(getConfigFormat(), configFiles)
+	c, err := core.LoadConfig(getConfigFormat(), configFiles)
 
 	if err != nil {
 		return nil, newError("failed to load config files: [", configFiles.String(), "]").Base(err)
 	}
 
-	server, err := core.New(config)
+	server, err := core.New(c)
 	if err != nil {
 		return nil, newError("failed to create server").Base(err)
 	}

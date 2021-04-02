@@ -28,7 +28,7 @@ func TestUDPEncoding(t *testing.T) {
 			Email: "love@example.com",
 			Account: toAccount(&Account{
 				Password:   "shadowsocks-password",
-				CipherType: CipherType_AES_128_CFB,
+				CipherType: CipherType_AES_128_GCM,
 			}),
 		},
 	}
@@ -38,14 +38,16 @@ func TestUDPEncoding(t *testing.T) {
 	encodedData, err := EncodeUDPPacket(request, data.Bytes())
 	common.Must(err)
 
-	decodedRequest, decodedData, err := DecodeUDPPacket(request.User, encodedData)
+	validator := new(Validator)
+	validator.Add(request.User)
+	decodedRequest, decodedData, err := DecodeUDPPacket(validator, encodedData)
 	common.Must(err)
 
 	if r := cmp.Diff(decodedData.Bytes(), data.Bytes()); r != "" {
 		t.Error("data: ", r)
 	}
 
-	if r := cmp.Diff(decodedRequest, request); r != "" {
+	if r := cmp.Diff(decodedRequest, request, cmp.Comparer(func(a1, a2 protocol.Account) bool { return a1.Equals(a2) })); r != "" {
 		t.Error("request: ", r)
 	}
 }
@@ -65,7 +67,7 @@ func TestTCPRequest(t *testing.T) {
 					Email: "love@example.com",
 					Account: toAccount(&Account{
 						Password:   "tcp-password",
-						CipherType: CipherType_CHACHA20,
+						CipherType: CipherType_CHACHA20_POLY1305,
 					}),
 				},
 			},
@@ -81,7 +83,7 @@ func TestTCPRequest(t *testing.T) {
 					Email: "love@example.com",
 					Account: toAccount(&Account{
 						Password:   "password",
-						CipherType: CipherType_AES_256_CFB,
+						CipherType: CipherType_AES_256_GCM,
 					}),
 				},
 			},
@@ -97,7 +99,7 @@ func TestTCPRequest(t *testing.T) {
 					Email: "love@example.com",
 					Account: toAccount(&Account{
 						Password:   "password",
-						CipherType: CipherType_CHACHA20_IETF,
+						CipherType: CipherType_AES_128_GCM,
 					}),
 				},
 			},
@@ -117,9 +119,11 @@ func TestTCPRequest(t *testing.T) {
 
 		common.Must(writer.WriteMultiBuffer(buf.MultiBuffer{data}))
 
-		decodedRequest, reader, err := ReadTCPSession(request.User, cache)
+		validator := new(Validator)
+		validator.Add(request.User)
+		decodedRequest, reader, err := ReadTCPSession(validator, cache)
 		common.Must(err)
-		if r := cmp.Diff(decodedRequest, request); r != "" {
+		if r := cmp.Diff(decodedRequest, request, cmp.Comparer(func(a1, a2 protocol.Account) bool { return a1.Equals(a2) })); r != "" {
 			t.Error("request: ", r)
 		}
 
@@ -139,7 +143,7 @@ func TestUDPReaderWriter(t *testing.T) {
 	user := &protocol.MemoryUser{
 		Account: toAccount(&Account{
 			Password:   "test-password",
-			CipherType: CipherType_CHACHA20_IETF,
+			CipherType: CipherType_CHACHA20_POLY1305,
 		}),
 	}
 	cache := buf.New()

@@ -60,8 +60,10 @@ type Outbound struct {
 
 // SniffingRequest controls the behavior of content sniffing.
 type SniffingRequest struct {
+	ExcludeForDomain               []string
 	OverrideDestinationForProtocol []string
 	Enabled                        bool
+	MetadataOnly                   bool
 }
 
 // Content is the metadata of the connection content.
